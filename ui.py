@@ -32,7 +32,7 @@ class BlurredWidget(QWidget):
         """)
         
 class EmailPreviewWidget(QWidget):
-    """邮件预览窗口"""
+    """修改邮件预览窗口以支持HTML格式"""
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
@@ -42,6 +42,16 @@ class EmailPreviewWidget(QWidget):
         self.content = QTextEdit()
         self.content.setReadOnly(True)
         
+        # 设置预览窗口的样式
+        self.content.setStyleSheet("""
+            QTextEdit {
+                background-color: white;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 10px;
+            }
+        """)
+        
         layout.addWidget(self.subject_label)
         layout.addWidget(self.to_label)
         layout.addWidget(self.content)
@@ -49,51 +59,58 @@ class EmailPreviewWidget(QWidget):
     def update_preview(self, subject, to_name, to_email, content):
         self.subject_label.setText(f"主题: {subject}")
         self.to_label.setText(f"收件人: {to_name} <{to_email}>")
+        # 直接设置HTML内容
         self.content.setHtml(content)
 
 class EmailSenderThread(QThread):
     """邮件发送线程"""
     progress_updated = pyqtSignal(int)
-    email_sent = pyqtSignal(str, str)
-    finished = pyqtSignal()
-    error = pyqtSignal(str)
+    sending_finished = pyqtSignal()
+    error_occurred = pyqtSignal(str)
     
-    def __init__(self, email_sender, data, template, variable_columns, subject, interval):
+    def __init__(self, email_sender, excel_data, template_content, subject,
+                 name_column, email_column, interval):
         super().__init__()
         self.email_sender = email_sender
-        self.data = data
-        self.template = template
-        self.variable_columns = variable_columns
+        self.excel_data = excel_data
+        self.template_content = template_content
         self.subject = subject
+        self.name_column = name_column
+        self.email_column = email_column
         self.interval = interval
         self.is_running = True
-        
+    
     def run(self):
-        total = len(self.data)
-        for i, row in enumerate(self.data):
-            if not self.is_running:
-                break
+        try:
+            total = len(self.excel_data)
+            for i, row in enumerate(self.excel_data):
+                if not self.is_running:
+                    break
+                    
+                # 替换模板中的变量
+                content = self.template_content
+                for col, value in row.items():
+                    content = content.replace(f"{{{col}}}", str(value))
                 
-            try:
-                # 替换所有变量
-                content = self.template
-                for col in self.variable_columns:
-                    content = content.replace(f"{{{col}}}", str(row[col]))
-                
-                self.email_sender.send_email(row['email'], self.subject, content)
-                self.email_sent.emit(row['name'], row['email'])
+                # 发送邮件
+                self.email_sender.send_email(
+                    row[self.email_column],
+                    self.subject,
+                    content
+                )
                 
                 # 更新进度
                 progress = int((i + 1) / total * 100)
                 self.progress_updated.emit(progress)
                 
-                # 按指定间隔暂停
-                self.msleep(self.interval * 1000)
-                
-            except Exception as e:
-                self.error.emit(f"发送给 {row['name']} <{row['email']}> 失败: {str(e)}")
-        
-        self.finished.emit()
+                # 等待指定时间
+                if i < total - 1:  # 最后一封邮件不需要等待
+                    QThread.sleep(self.interval)
+            
+            self.sending_finished.emit()
+            
+        except Exception as e:
+            self.error_occurred.emit(str(e))
     
     def stop(self):
         self.is_running = False
@@ -138,6 +155,7 @@ class MainWindow(QMainWindow):
         self.apply_blur_style()
     
     def setup_ui(self):
+        """修改UI设置，移除不需要的组件"""
         # 主容器
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
@@ -552,6 +570,7 @@ class MainWindow(QMainWindow):
             )
     
     def start_sending(self):
+        """修改发送逻辑，移除变量选择相关代码"""
         if not self.template_content:
             QMessageBox.warning(self, "警告", "请先加载Word模板!")
             return
@@ -560,59 +579,38 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "警告", "请先加载Excel数据!")
             return
             
-        self.name_column = self.name_column
-        self.email_column = self.email_column
-        
         if not self.name_column or not self.email_column:
-            QMessageBox.warning(self, "警告", "请选择姓名和邮箱列!")
+            QMessageBox.warning(self, "警告", "未找到姓名或邮箱列!")
             return
             
         subject = self.subject_input.text()
         if not subject:
             QMessageBox.warning(self, "警告", "请输入邮件主题!")
             return
-            
-        # 获取选中的变量列
-        selected_items = self.columns_list.selectedItems()
-        selected_columns = [item.text() for item in selected_items]
         
-        # 准备数据
-        data = []
-        for row in self.excel_data:
-            try:
-                item = {
-                    "name": row[self.name_column],
-                    "email": row[self.email_column],
-                }
-                # 添加选中的变量数据
-                for col in selected_columns:
-                    item[col] = row[col]
-                data.append(item)
-            except Exception as e:
-                print(f"跳过无效数据: {row}, 错误: {str(e)}")
-        
-        # 创建并启动发送线程
+        # 创建发送线程
         self.sender_thread = EmailSenderThread(
             self.email_sender,
-            data,
+            self.excel_data,
             self.template_content,
-            selected_columns,  # 传递选中的列名
             subject,
+            self.name_column,
+            self.email_column,
             self.interval_spinbox.value()
         )
         
+        # 连接信号
         self.sender_thread.progress_updated.connect(self.update_progress)
-        self.sender_thread.email_sent.connect(self.on_email_sent)
-        self.sender_thread.finished.connect(self.on_sending_finished)
-        self.sender_thread.error.connect(self.on_sending_error)
-        
-        self.sender_thread.start()
+        self.sender_thread.sending_finished.connect(self.sending_finished)
+        self.sender_thread.error_occurred.connect(self.handle_sending_error)
         
         # 更新UI状态
         self.send_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self.status_label.setText("发送中...")
         self.progress_bar.setValue(0)
+        
+        # 开始发送
+        self.sender_thread.start()
     
     def stop_sending(self):
         if hasattr(self, "sender_thread") and self.sender_thread.isRunning():
@@ -623,16 +621,13 @@ class MainWindow(QMainWindow):
     def update_progress(self, value):
         self.progress_bar.setValue(value)
     
-    def on_email_sent(self, name, email):
-        self.status_label.setText(f"已发送至: {name} <{email}>")
-    
-    def on_sending_finished(self):
+    def sending_finished(self):
         self.send_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.status_label.setText("发送完成!")
         QMessageBox.information(self, "成功", "所有邮件已发送完成!")
     
-    def on_sending_error(self, error_msg):
+    def handle_sending_error(self, error_msg):
         self.status_label.setText(f"错误: {error_msg}")
     
     def test_email_config(self):
@@ -649,23 +644,6 @@ class MainWindow(QMainWindow):
         """显示帮助对话框"""
         dialog = HelpDialog(self)
         dialog.exec_()
-
-    def update_selected_variables(self):
-        """更新选中的变量列表"""
-        selected_items = self.columns_list.selectedItems()
-        selected_vars = [item.text() for item in selected_items]
-        
-        # 构建变量提示文本
-        vars_text = "已选变量：\n"
-        if selected_vars:
-            vars_text += "\n".join([f"{{{var}}}" for var in selected_vars])
-        else:
-            vars_text += "（无）"
-        
-        self.selected_vars_label.setText(vars_text)
-        
-        # 更新预览
-        self.auto_generate_preview()
 
 class EmailTestDialog(QDialog):
     def __init__(self, parent=None):

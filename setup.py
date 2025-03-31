@@ -31,7 +31,6 @@ def copy_resources():
     resource_files = [
         'config.ini',
         'README.md',
-        'requirements.txt',
         'email.png'  # 程序图标
     ]
     
@@ -46,8 +45,8 @@ def create_version_info():
     version_info = f"""
 VSVersionInfo(
     ffi=FixedFileInfo(
-        filevers=(1, 0, 0, 0),
-        prodvers=(1, 0, 0, 0),
+        filevers=(2, 0, 0, 0),
+        prodvers=(2, 0, 0, 0),
         mask=0x3f,
         flags=0x0,
         OS=0x40004,
@@ -62,12 +61,12 @@ VSVersionInfo(
                 [
                     StringStruct(u'CompanyName', u'Your Company'),
                     StringStruct(u'FileDescription', u'智能邮件群发系统'),
-                    StringStruct(u'FileVersion', u'1.0.0'),
+                    StringStruct(u'FileVersion', u'2.0.0'),
                     StringStruct(u'InternalName', u'email_sender'),
                     StringStruct(u'LegalCopyright', u'Copyright (C) {datetime.now().year}'),
                     StringStruct(u'OriginalFilename', u'邮件群发工具.exe'),
                     StringStruct(u'ProductName', u'智能邮件群发系统'),
-                    StringStruct(u'ProductVersion', u'1.0.0')
+                    StringStruct(u'ProductVersion', u'2.0.0')
                 ])
         ]),
         VarFileInfo([VarStruct(u'Translation', [2052, 1200])])
@@ -98,16 +97,28 @@ def build_executable():
         '--noupx',                        # 不使用UPX压缩
         f'--workpath=build',              # 指定构建目录
         f'--distpath=dist',               # 指定输出目录
-        '--hidden-import=PyQt5.sip',      # 添加隐式导入
+        
+        # 添加必要的隐式导入
+        '--hidden-import=PyQt5.sip',
         '--hidden-import=PyQt5.QtCore',
         '--hidden-import=PyQt5.QtGui',
         '--hidden-import=PyQt5.QtWidgets',
-        '--hidden-import=lxml._elementpath', # 添加lxml依赖
-        '--hidden-import=lxml.etree',       # 添加lxml依赖
-        '--collect-all=lxml',               # 收集所有lxml相关文件
-        '--exclude-module=PyQt6',         # 排除PyQt6
-        '--exclude-module=PySide6',       # 排除PySide6
-        '--exclude-module=PySide2',       # 排除PySide2
+        '--hidden-import=docx',
+        '--hidden-import=docx.opc.exceptions',
+        '--hidden-import=docx.shared',
+        '--hidden-import=bs4',
+        '--hidden-import=lxml._elementpath',
+        '--hidden-import=lxml.etree',
+        
+        # 收集所有必要的包
+        '--collect-all=docx',
+        '--collect-all=lxml',
+        '--collect-all=bs4',
+        
+        # 排除不需要的Qt模块
+        '--exclude-module=PyQt6',
+        '--exclude-module=PySide6',
+        '--exclude-module=PySide2',
     ]
     
     # 添加PyQt5依赖
@@ -123,16 +134,6 @@ def build_executable():
         if os.path.exists(plugins_path):
             command.append(f'--add-data={plugins_path};PyQt5/Qt5/plugins')
     
-    # 添加qt_material资源
-    try:
-        import qt_material
-        qt_material_path = os.path.dirname(qt_material.__file__)
-        resources_path = os.path.join(qt_material_path, 'resources')
-        if os.path.exists(resources_path):
-            command.append(f'--add-data={resources_path};qt_material/resources')
-    except ImportError:
-        print("警告: qt_material模块未找到")
-
     # 添加python-docx依赖
     try:
         import docx
@@ -140,6 +141,14 @@ def build_executable():
         command.append(f'--add-data={docx_path};docx')
     except ImportError:
         print("警告: python-docx模块未找到")
+        
+    # 添加beautifulsoup4依赖
+    try:
+        import bs4
+        bs4_path = os.path.dirname(bs4.__file__)
+        command.append(f'--add-data={bs4_path};bs4')
+    except ImportError:
+        print("警告: beautifulsoup4模块未找到")
 
     # 运行构建命令
     PyInstaller.__main__.run(command)
@@ -156,7 +165,7 @@ def main():
         create_version_info()
         
         print("3. 构建可执行文件...")
-        os.environ['PYTHONPATH'] = os.path.dirname(os.path.abspath(__file__))  # 设置PYTHONPATH
+        os.environ['PYTHONPATH'] = os.path.dirname(os.path.abspath(__file__))
         build_executable()
         
         print("4. 复制资源文件...")

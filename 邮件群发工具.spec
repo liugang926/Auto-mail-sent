@@ -1,10 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('config.ini', '.'), ('README.md', '.'), ('email.png', '.'), ('C:\\Users\\ND\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyQt5\\Qt5\\bin', 'PyQt5/Qt5/bin'), ('C:\\Users\\ND\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyQt5\\Qt5\\plugins', 'PyQt5/Qt5/plugins'), ('C:\\Users\\ND\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\qt_material\\resources', 'qt_material/resources'), ('C:\\Users\\ND\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\docx', 'docx')]
+datas = [('config.ini', '.'), ('README.md', '.'), ('email.png', '.'), ('C:\\Users\\ND\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyQt5\\Qt5\\bin', 'PyQt5/Qt5/bin'), ('C:\\Users\\ND\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\PyQt5\\Qt5\\plugins', 'PyQt5/Qt5/plugins'), ('C:\\Users\\ND\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\docx', 'docx'), ('C:\\Users\\ND\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\bs4', 'bs4')]
 binaries = []
-hiddenimports = ['PyQt5.sip', 'PyQt5.QtCore', 'PyQt5.QtGui', 'PyQt5.QtWidgets', 'lxml._elementpath', 'lxml.etree']
+hiddenimports = ['PyQt5.sip', 'PyQt5.QtCore', 'PyQt5.QtGui', 'PyQt5.QtWidgets', 'docx', 'docx.opc.exceptions', 'docx.shared', 'bs4', 'lxml._elementpath', 'lxml.etree']
+tmp_ret = collect_all('docx')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('lxml')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('bs4')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
