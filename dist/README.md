@@ -15,6 +15,7 @@
 - 支持中断发送任务
 - 邮箱配置测试功能
 - 现代化UI界面设计
+![e855ce1ce7d24461b8764f3f3875c116](https://github.com/user-attachments/assets/a8d47018-0d9c-43a7-8db5-2d9f761e45f7)
 
 ## 系统要求
 
